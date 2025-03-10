@@ -1,21 +1,65 @@
-#![#![no_std]
-#![#![feature(allocator_api, global_asm)]]
+#![no_std]
+#![feature(allocator_api)]
 
-// Kernel module imported. For the official macro documentation refers to https://rust-for-linux.github.io/docs/kernel/
-//  TODO: check if some module can be removed 
-use kernel::prelude::*;
-use kernel::{
-    device::RawDevice,
-    file::{File, Operations},
-    io_buffer::{IoBufferReader, IoBufferWriter},
-};
+use core::panic::PanicInfo;
 
-module! {
-    type: DriverVerifier,
-    name: "driver_verifier",
-    author: "Giorgio Saldana",
-    description: "A kernel module to verify driver functionality",
-    license: "GPL",
+mod input_verifier;
+
+// Static mutable global for our verifier
+static mut VERIFIER: Option<input_verifier::InputDeviceVerifier> = None;
+
+// Panic handler for no_std
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
 }
 
+// FFI functions to be called from C
 
+#[no_mangle]
+pub extern "C" fn rust_init() -> i32 {
+    match input_verifier::InputDeviceVerifier::new() {
+        Ok(verifier) => {
+            unsafe {
+                VERIFIER = Some(verifier);
+            }
+            0 
+        }
+        Err(_) => -1, 
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rust_exit() {
+    unsafe {
+        VERIFIER = None;
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rust_scan_devices() -> i32 {
+    unsafe {
+        if let Some(ref mut verifier) = VERIFIER {
+            match verifier.scan_devices() {
+                Ok(_) => 0, 
+                Err(_) => -1, 
+            }
+        } else {
+            -1 
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rust_verify_touchpad() -> i32 {
+    unsafe {
+        if let Some(ref mut verifier) = VERIFIER {
+            match verifier.verify_touchpad() {
+                Ok(working) => if working { 1 } else { 0 },
+                Err(_) => -1, 
+            }
+        } else {
+            -1 
+        }
+    }
+}
