@@ -3,4 +3,15 @@ name = "driver-verifier"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "driver_verifier"
+crate-type = ["staticlib"]
+
 [dependencies]
+libc = "0.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = true
